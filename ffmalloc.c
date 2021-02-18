@@ -2342,6 +2342,13 @@ void* ffmalloc(size_t size) {
 	FFAtomicIncrement(arenas[0]->profile.mallocCount);
 	FFAtomicAdd(arenas[0]->profile.totalBytesRequested, size);
 #endif
+	// If size is very close to SIZE_MAX, the ALIGN_SIZE macro will 
+	// return 0
+	if(size > SIZE_MAX - MIN_ALIGNMENT) {
+		errno = ENOMEM;
+		return NULL;
+	}
+
 	// All allocations are at least 8 byte aligned. Round up if needed
 	size = ALIGN_SIZE(size);
 
