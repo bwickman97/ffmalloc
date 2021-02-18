@@ -2370,9 +2370,7 @@ void* ffmalloc(size_t size) {
 	print_current_usage();
 #endif
 	if(allocation == NULL) {
-		fprintf(stderr, "ffmalloc returning NULL\n");
-		fflush(stderr);
-		abort();
+		errno = ENOMEM;
 	}
 	return allocation;
 }
