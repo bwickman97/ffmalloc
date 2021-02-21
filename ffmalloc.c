@@ -3022,7 +3022,8 @@ ffresult_t ffmalloc_arena(ffarena_t arenaKey, void** ptr, size_t size) {
 	
 	// Prohibit zero byte allocations. It can't be realloc'ed to bigger
 	// than 8 anyways without a copy so just ask for what you need to start
-	if(size == 0) {
+	// Also protect against overflow due to alignment below
+	if(size == 0 || size > SIZE_MAX - MIN_ALIGNMENT) {
 		return FFBAD_PARAM;
 	}
 
