@@ -2541,15 +2541,12 @@ void* ffreallocarray(void* ptr, size_t nmemb, size_t size) {
 // that is >= nmemb * size and is guaranteed to be zeroed out.
 // Returns NULL on error
 void* ffcalloc(size_t nmemb, size_t size) {
-        // There is a possibility that nmemb might be zero.
-        // In this case, just check whether size > SIZE or not and return accordingly
-        if (nmemb == 0 && size > SIZE_MAX)
+        // Don't bother with size 0 allocations
+        if (nmemb == 0 || size == 0)
                 return NULL;
 
-	// While technically unsigned types can't overflow in C, they
-	// definitely do wrap around. So check for "overflow" here
-	// lest we enable a buffer overflow in the caller
-	if (nmemb && size > (SIZE_MAX / nmemb)) {
+	// Ensure multiplication won't overflow
+	if (size > (SIZE_MAX / nmemb)) {
 		return NULL;
 	}
 
