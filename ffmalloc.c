@@ -2432,21 +2432,27 @@ void* ffrealloc(void* ptr, size_t size) {
 		// allocated space. It seems like this would be uncommon but
 		// profiling the SPECint PerlBench test says that its at least
 		// occassionally very common
-		FFEnterCriticalSection(&pool->poolLock);
-		size_t additionalSize = ALIGN_SIZE(size) - oldSize;
-		if(index == pool->nextFreeIndex-1 && (pool->nextFreePage + additionalSize <= pool->end)) {
+
+		// Potential integer overflow issue below. Since inplace resize 
+		// is only possible if the new size would still fit within the 
+		// pool, checking that size < POOL_SIZE should be sufficient
+		if(size < POOL_SIZE) {
+			FFEnterCriticalSection(&pool->poolLock);
+			size_t additionalSize = ALIGN_SIZE(size) - oldSize;
+			if(index == pool->nextFreeIndex-1 && (pool->nextFreePage + additionalSize <= pool->end)) {
 #ifdef FF_PROFILE
-			FFAtomicIncrement(arenas[0]->profile.reallocCouldGrow);
-			FFAtomicAdd(arenas[0]->profile.currentBytesAllocated, additionalSize);
-			FFAtomicAdd(arenas[0]->profile.totalBytesAllocated, additionalSize);
-			FFAtomicAdd(arenas[0]->profile.totalBytesRequested, size - oldSize);
+				FFAtomicIncrement(arenas[0]->profile.reallocCouldGrow);
+				FFAtomicAdd(arenas[0]->profile.currentBytesAllocated, additionalSize);
+				FFAtomicAdd(arenas[0]->profile.totalBytesAllocated, additionalSize);
+				FFAtomicAdd(arenas[0]->profile.totalBytesRequested, size - oldSize);
 #endif
-			pool->nextFreePage += additionalSize;
-			pool->tracking.allocations[pool->nextFreeIndex] += additionalSize;
+				pool->nextFreePage += additionalSize;
+				pool->tracking.allocations[pool->nextFreeIndex] += additionalSize;
+				FFLeaveCriticalSection(&pool->poolLock);
+				return ptr;
+			}
 			FFLeaveCriticalSection(&pool->poolLock);
-			return ptr;
 		}
-		FFLeaveCriticalSection(&pool->poolLock);
 #endif
 
 		// A bigger reallocation size requires copying the old data to
@@ -2677,7 +2683,8 @@ static inline void* ffmemalign_internal(size_t alignment, size_t size) {
 // power of two
 int ffposix_memalign(void** ptr, size_t alignment, size_t size) {
 	// Don't bother with zero byte allocations
-	if(size == 0) {
+	// Also check against overflow below
+	if(size == 0 || (size >= SIZE_MAX - PAGE_SIZE )) {
 		*ptr = NULL;
 		return EINVAL;
 	}
@@ -2710,7 +2717,8 @@ int ffposix_memalign(void** ptr, size_t alignment, size_t size) {
 // will be a multiple of alignment and alignment must be a power of two.
 void* ffmemalign(size_t alignment, size_t size) {
 	// Forbid zero byte allocations
-	if(size == 0) {
+	// Protect against integer overflow later
+	if(size == 0 || (size >= SIZE_MAX - PAGE_SIZE)) {
 		return NULL;
 	}
 
@@ -2744,7 +2752,8 @@ void* ffmemalign(size_t alignment, size_t size) {
 // that is >= size and at least alignment aligned or NULL on failure
 void *ffaligned_alloc(size_t alignment, size_t size) {
 	// Don't allow zero byte allocations
-	if(size == 0) {
+	// Protect against integer overflow
+	if(size == 0 || (size >= SIZE_MAX - PAGE_SIZE)) {
 		return NULL;
 	}
 
@@ -2846,6 +2855,9 @@ void* valloc(size_t size) {
 // Rounds size up to a multiple of PAGE_SIZE. Returned address will be
 // page size aligned
 void* pvalloc(size_t size) {
+	if(size >= SIZE_MAX - PAGE_SIZE) {
+		return NULL;
+	}
 	return ffmemalign(PAGE_SIZE, ALIGN_TO(size, PAGE_SIZE));
 }
 #endif
@@ -2878,7 +2890,7 @@ char* ffstrdup(const char* s) {
 // Duplicates the first n characters of the string into memory allocated by
 // ffmalloc. The caller is responsible for calling fffree
 char* ffstrndup(const char* s, size_t n) {
-	if(s == NULL) {
+	if(s == NULL || n == SIZE_MAX) {
 		return NULL;
 	}
 
