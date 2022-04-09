@@ -74,6 +74,11 @@
 #endif
 #endif
 
+// MAP_POPULATE is Linux-specific.
+#ifndef MAP_POPULATE
+#define MAP_POPULATE 0
+#endif
+
 typedef unsigned char byte;
 
 /*** Library Constants ***/
