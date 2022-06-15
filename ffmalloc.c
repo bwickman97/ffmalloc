@@ -99,8 +99,10 @@ typedef unsigned char byte;
 #define POOL_SIZE_BITS 22
 #define POOL_SIZE (ONE64 << POOL_SIZE_BITS)
 
+#ifndef PAGE_SIZE
 // The size of a single page of memory from the OS
 #define PAGE_SIZE UINT64_C(4096)
+#endif
 
 // Half of an OS memory page
 #define HALF_PAGE UINT64_C(2048)
